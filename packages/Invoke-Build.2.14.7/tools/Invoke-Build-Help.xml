@@ -8,25 +8,21 @@
 </maml:description>
 </command:details>
 <maml:description>
-<maml:para>Install: copy Invoke-Build.ps1 and Invoke-Build.ps1-Help.xml to the path.
-
-This script invokes specified tasks defined in a PowerShell script. This
-process is called build and its concepts are similar to psake and MSBuild.
+<maml:para>The command invokes specified and referenced tasks defined in a PowerShell
+script. The process is called build and the script is called build script.
 
 A build script defines parameters, variables, tasks, and events. Any code
 is invoked with the current location set to $BuildRoot, the build script
 directory. $ErrorActionPreference is set to &apos;Stop&apos;.
 
-In order to get help for special functions dot-source
-Invoke-Build.ps1 by the operator . and then use Get-Help:
+To get help for commands dot-source Invoke-Build:
 
-    PS&gt; . Invoke-Build.ps1  # shows special function names
-    PS&gt; Get-Help &lt;function&gt; # get help for a function
+    PS&gt; . Invoke-Build
+    PS&gt; help task -full
 
 RESERVED FUNCTION AND VARIABLE NAMES
 
-Function and variable names starting with &quot;*&quot; are reserved for the engine.
-For technical reasons they cannot be completely hidden from scripts.
+Function and variable names starting with &apos;*&apos; are reserved for the engine.
 Scripts should not use functions and variables with such names.
 
 EXPOSED FUNCTIONS AND ALIASES
@@ -35,6 +31,7 @@ Scripts should use available aliases instead of function names.
 
     Add-BuildTask (task)
     Assert-Build (assert)
+    Assert-BuildEquals (equals)
     Get-BuildError (error)
     Get-BuildProperty (property)
     Get-BuildVersion
@@ -70,56 +67,81 @@ Exposed variables designed for build scripts and tasks:
     $Task      - current task
 
 $Task is available for the task script blocks defined by parameters If,
-Inputs, Outputs, Jobs and the event functions Enter|Exit-BuildTask and
+Inputs, Outputs, Jobs, and the event functions Enter|Exit-BuildTask and
 Enter|Exit-BuildJob.
 
     $Task properties available for reading:
 
     - Name - [string], task name
-    - Jobs - [object[]], names and script blocks
-    - Started - [DateTime], start time
-    - In Exit-BuildTask:
-        - Error - an error stopped the task
-        - Elapsed - [TimeSpan], task duration
+    - Jobs - [object[]], task jobs
+    - Started - [DateTime], task start time
 
-NOTE: The special variable $_ may be defined and visible. Scripts and tasks
-can use it as their own, that is assign at first. Only in special cases it
-is used as an input.
+    In Exit-BuildTask
+    - Error - error which stopped the task
+    - Elapsed - [TimeSpan], task duration
+
+The variable $_ may be exposed. In special cases it is used as an input.
+In other cases build scripts should not assume anything about its value.
 
 EVENT FUNCTIONS
 
 The build engine defines and calls the following empty functions:
 
     Enter-Build     - before all tasks
-    Enter-BuildTask - before each task
-    Enter-BuildJob  - before each job
     Exit-Build      - after all tasks
+
+    Enter-BuildTask - before each task
     Exit-BuildTask  - after each task
-    Exit-BuildJob   - after each job
-    Export-Build    - after each task of a persistent build
+
+    Enter-BuildJob  - before each task script job
+    Exit-BuildJob   - after each task script job
+
+    Export-Build    - on saving persistent build checkpoints
     Import-Build    - once on resuming of a persistent build
 
 A script can redefine them. Note that nested builds do not inherit events,
 the engine always defines new empty functions before invoking a new script.
 
 Events are not called on WhatIf. If Enter-* is called then its pair Exit-*
-is called, too. Events are suitable for initializing and cleaning things.
+is called, too. Events are suitable for initializing, cleaning, logging.
 
 Enter-Build and Exit-Build are invoked in the script scope. Enter-Build is
 a good place for heavy initialization, it does not have to care of WhatIf.
+Also, unlike the top level script code, Enter-Build can output/log data.
 
-Enter-BuildTask and Exit-BuildTask are invoked in the same scope which is
-the parent for a task invoked between them.
-
-Enter-BuildJob and Exit-BuildJob are invoked in the same scope as
-*-BuildTask and take one argument, the job number.
+Enter-BuildTask, Exit-BuildTask, Enter-BuildJob, and Exit-BuildJob are
+invoked in the same scope, the parent of a task. *Job functions take a
+single argument, the job number.
 
 Export-Build and Import-Build are used with persistent builds. Export-Build
 outputs data to be exported to clixml. Import-Build is called with a single
 argument containing the original data imported from clixml. It is called in
 the script scope and normally restores script scope variables. Note that
 this is not needed for script parameters, the engine takes care of them.
-Variables may be declared as parameters just in order to be persistent.</maml:para>
+Variables may be declared as parameters just in order to be persistent.
+
+DOT-SOURCING Invoke-Build
+
+Build-like environment can be imported to normal scripts:
+
+    . Invoke-Build [&lt;root&gt;]
+
+When this command is invoked from a script it
+
+- sets $ErrorActionPreference to Stop
+- sets $BuildFile to the invoked script path
+- sets $BuildRoot to the script directory or &lt;root&gt;
+- sets the current PowerShell location to $BuildRoot
+- imports utility commands
+    - assert
+    - equals
+    - exec
+    - property
+    - use
+    - Write-Build
+
+Some other build commands are also imported. They are available for getting
+help and not designed for use in normal scripts.</maml:para>
 </maml:description>
 <command:syntax>
 <command:syntaxItem>
@@ -174,10 +196,10 @@ SPECIAL TASKS
 also checks tasks and throws errors on missing or cyclic references.
 Task synopsis is defined in preceding comments as # Synopsis: ...
 
-?? - Tells to collect and get all tasks as a ordered dictionary. It can
-be used by external tools for task analysis, TabExpansion, and etc.
+?? - Tells to collect and get all tasks as an ordered dictionary. It
+can be used by external tools for analysis, TabExpansion, and etc.
 
-Tasks ? and ?? sets $WhatIf to true. Properly designed build scripts
+Tasks ? and ?? set $WhatIf to true. Properly designed build scripts
 should not perform anything significant if $WhatIf is set to true.
 
 * - Tells to invoke all tasks. This is useful when all tasks are tests
@@ -185,25 +207,25 @@ or steps in a sequence that can be stopped and resumed, see Checkpoint.
 
 ** - Invokes * for all files *.test.ps1 found recursively in the
 current directory or a directory specified by the parameter File.
-Other parameters except Result are not used.
+Other parameters except Result and Safe are ignored.
 
 Tasks ? and ?? can be combined with **
-?, ** - Tells to show all test tasks without invoking.
-??, ** - Tells to get task dictionaries for all test files.</maml:para>
+?, ** - To show all test tasks without invoking.
+??, ** - To get task dictionaries for all test files.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="2" >
 <maml:name>File</maml:name>
 <maml:description>
-<maml:para>A build script which defines tasks by the alias &quot;task&quot; (Add-BuildTask).
+<maml:para>A build script which defines tasks by the alias &apos;task&apos; (Add-BuildTask).
 
-If it is not specified then Invoke-Build looks for &quot;*.build.ps1&quot; files
-in the current location. A single file is used as the script. If there
-are more files then &quot;.build.ps1&quot; is used.
+If it is not specified then Invoke-Build looks for *.build.ps1 files in
+the current location. A single file is used as the script. If there are
+more files then .build.ps1 is used.
 
 If the build file is not found then a script defined by the environment
 variable InvokeBuildGetFile is called with the path as an argument. It
-may get a non standard build file. The full path is required.
+may get a non standard build file. The full path should be returned.
 
 If the file is still not defined then parent directories are searched.</maml:para>
 </maml:description>
@@ -215,29 +237,33 @@ If the file is still not defined then parent directories are searched.</maml:par
 in special cases. Normally build script parameters may be specified for
 Invoke-Build itself, thanks to PowerShell dynamic parameters.
 
-Dynamic parameters and the table Parameters are not used together. If
-build script parameters conflict with Invoke-Build parameters then the
-table Parameters is the only way to pass them in the script.
+Dynamic parameters and the hashtable Parameters are not used together.
+If build script parameters conflict with Invoke-Build parameters then
+the hashtable Parameters is the only way to pass them in the script.
 
 Build scripts define parameters using standard syntax. Parameters are
 shared between tasks: for reading as $ParameterName, for writing as
 $script:ParameterName.
 
 Build script parameters are automatically exported and imported by the
-engine on persistent builds, see Checkpoint.</maml:para>
+engine on persistent builds, see Checkpoint.
+
+NOTE: Dynamic switches must be specified after positional arguments of
+Task and File if they are used with omitted parameter names. Otherwise
+switches swallow these arguments and make a command incorrect.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>Checkpoint</maml:name>
 <maml:description>
 <maml:para>Specifies the checkpoint file and makes the build persistent. It is
-possible to resume an interrupted build starting at an interrupted
-task. The checkpoint file is written after each completed task and
-deleted when the build completes.
+possible to resume an interrupted build starting at the interrupted
+task. The checkpoint file is written before processing of each task
+and deleted if the build succeeds.
 
 In order to resume an interrupted persistent build specify the same
-checkpoint file and the switch Resume. The tasks, build file and
-parameters are ignored on resuming, their values are restored.
+checkpoint file and the switch Resume. Task, File, Parameters are
+ignored, their values are restored from the file.
 
 Persistent builds must be designed properly. Data shared by tasks are
 exported and imported by the functions Export-Build and Import-Build.
@@ -258,51 +284,60 @@ Notes
 <maml:description>
 <maml:para>Tells to output build information using a variable. It is either a name
 of variable to be created or any object with the property Value to be
-assigned (e.g. a [ref] or [hashtable]).
+assigned (e.g. [ref] or [hashtable]).
 
 Result object properties:
 
     All - all defined tasks
     Error - a terminating build error
     Tasks - invoked tasks including nested
-    Errors - error records including nested (*)
+    Errors - error objects including nested
     Warnings - warning messages including nested
 
-(*) This list will continue to exist but objects may change in the
-future. For better analysis iterate through Tasks and check their
-Error.
-
-Task object properties:
+Tasks is a list of objects:
 
     Name - task name
     Jobs - task jobs
     Error - task error
     Started - start time
     Elapsed - task duration
-    InvocationInfo{.ScriptName|.ScriptLineNumber} - task location.
+    InvocationInfo - task location (.ScriptName and .ScriptLineNumber)
 
-Other result and task data should not be used. These data should not be
-changed, especially if they are requested for a nested build, parent
-builds use these data.</maml:para>
+Errors is a list of objects:
+
+    Error - original error record
+    File - current $BuildFile
+    Task - current $Task or null for non-task errors
+
+Warnings is a list of objects:
+
+    Message - warning message
+    File - current $BuildFile
+    Task - current $Task or null for non-task warnings
+
+These data should be used for reading only.
+Other result and task data should not be used.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>Resume</maml:name>
 <maml:description>
 <maml:para>Tells to resume an interrupted persistent build from a checkpoint file
-specified by Checkpoint. Initial tasks, build files and parameters are
-ignored on resuming, values are restored from the file.</maml:para>
+specified by Checkpoint. Task, File, and Parameters are ignored, their
+values are restored from the file.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>Safe</maml:name>
 <maml:description>
 <maml:para>Tells to catch a build failure, store an error as the property Error of
-Result and return quietly. A caller should use Result and check its
-Error in order to analyse build failures.
+Result and return quietly. A caller should use Result and check Error.
 
-Some exceptions are possible even in safe mode. They show serious
-errors, not build failures. For example, a build script is missing.</maml:para>
+Some exceptions are possible even in the safe mode. They show serious
+errors, not build failures. For example, a build script is missing.
+
+When Safe is used together with the special task ** (invoke *.test.ps1)
+then task failures stop current test scripts, not the whole testing.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
@@ -330,15 +365,16 @@ it should check for $WhatIf and skip some significant actions.</maml:para>
 <maml:para>Build process log which includes task starts, ends with durations,
 warnings, errors, and output of tasks and commands that they invoke.
 
-Build scripts should not output anything. Unexpected output is shown as
-a warning. Output is expected from tasks and special event functions.</maml:para>
+Output is expected from tasks and event functions. But build scripts
+should not output anything. Unexpected output is shown as a warning,
+in the future it may be treated as an error.</maml:para>
 </maml:description>
 </command:returnValue>
 </command:returnValues>
 <command:examples>
 <command:example>
 <maml:title>-------------------------- EXAMPLE 1 --------------------------</maml:title>
-<dev:code># Invoke the default task (&quot;.&quot; or the first added) in the default script
+<dev:code># Invoke the default task (&apos;.&apos; or the first added) in the default script
 # (a single file like *.build.ps1 or .build.ps1 if there are two or more)
 
 Invoke-Build</dev:code>
@@ -423,25 +459,28 @@ finally {
 <maml:uri>https://github.com/nightroman/Invoke-Build</maml:uri>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>Add-BuildTask</maml:linkText>
+<maml:linkText>Add-BuildTask (task)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>Assert-Build</maml:linkText>
+<maml:linkText>Assert-Build (assert)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>Get-BuildError</maml:linkText>
+<maml:linkText>Assert-BuildEquals (equals)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>Get-BuildProperty</maml:linkText>
+<maml:linkText>Get-BuildError (error)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>Invoke-BuildExec</maml:linkText>
+<maml:linkText>Get-BuildProperty (property)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>New-BuildJob</maml:linkText>
+<maml:linkText>Invoke-BuildExec (exec)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:linkText>Use-BuildAlias</maml:linkText>
+<maml:linkText>New-BuildJob (job)</maml:linkText>
+</maml:navigationLink>
+<maml:navigationLink>
+<maml:linkText>Use-BuildAlias (use)</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
 <maml:linkText>Write-Build</maml:linkText>
@@ -458,14 +497,21 @@ finally {
 <command:noun>BuildTask</command:noun>
 </command:details>
 <maml:description>
-<maml:para>Scripts use its alias &apos;task&apos;. This is the main feature of build scripts.
-At least one task must be added. It is used in the build script scope only.
+<maml:para>Scripts use its alias &apos;task&apos;. This is the main feature of build scripts. At
+least one task must be added. Normally it is used in the build script scope
+but it can be called anywhere, e.g. imported, created dynamically, and etc.
 
-In fact, this feature is literally all that build scripts really need.
-Other functions are mostly helpers, scripts do not have to use them.
+In fact, this function is literally all that build scripts really need.
+Other build functions are just helpers, scripts do not have to use them.
 
-Task synopsis is defined in preceding comments as # Synopsis: ...
-It is used in task information returned by Invoke-Build ?</maml:para>
+Task help-comments are special comments preceding task definitions
+
+    # Synopsis: ...
+    task ...
+
+Synopsis lines are used in task information returned by the command
+
+    Invoke-Build ?</maml:para>
 </maml:description>
 <command:syntax>
 <command:syntaxItem>
@@ -532,9 +578,9 @@ specified order.
 
 Valid job types are:
 
-    [string] - simple reference, name of an existing task;
-    [object] - advanced reference created by &apos;job&apos; (New-BuildJob);
-    [scriptblock] - action, a script block invoked for this task.</maml:para>
+    [string] - simple reference, an existing task name
+    [object] - advanced reference created by &apos;job&apos; (New-BuildJob)
+    [scriptblock] - action, a script block invoked for this task</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
@@ -545,8 +591,8 @@ Valid job types are:
 Altered tasks are defined as by their names or by the command &apos;job&apos;.
 In the latter case options are applied to the added task reference.
 
-Parameters After and Before are used in order to alter build task jobs
-in special cases when direct changes in task jobs are not suitable.</maml:para>
+Parameters After and Before are used in order to alter task jobs in
+special cases when direct changes in task source code are not suitable.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
@@ -554,47 +600,50 @@ in special cases when direct changes in task jobs are not suitable.</maml:para>
 <maml:description>
 <maml:para>Tells to add this task to job lists of the specified tasks. It is
 inserted before the first script job, if any, or added to the end.
+Note that Before tasks are added before After tasks.
 
-See the parameter After for details.</maml:para>
+See After for details.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>Data</maml:name>
 <maml:description>
-<maml:para>Any data attached to the task. These data are not used by the engine.
-When the task is invoked the data are available as $Task.Data.</maml:para>
+<maml:para>Any object attached to the task. It is not used by the engine.
+When the task is invoked the object is available as $Task.Data.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>Done</maml:name>
 <maml:description>
-<maml:para>Specifies the command or a script block invoked when the task is done.</maml:para>
+<maml:para>Specifies the command or a script block invoked when the task is done.
+It is mostly designed for wrapper functions creating special tasks.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>If</maml:name>
 <maml:description>
-<maml:para>Tells to skip the task if it is specified and evaluated to false. The
-value is a script block evaluated on task invocation or an object that
-is treated as Boolean on definition. In WhatIf mode a scriptblock is
-treated as true without invocation.
+<maml:para>Specifies the optional condition to be evaluated. If the condition
+evaluates to false then the task is not invoked.
 
-If it is a script block and the task is called several times then it is
-possible that the task is skipped at first but invoked later when this
-block gets true.</maml:para>
+The value is a script block evaluated on task invocation or an object
+treated as Boolean on definition. On WhatIf a script block is treated
+as true without invocation.
+
+If the task is called several times then it is possible that the task
+is skipped at first but invoked later when the script block gets true.</maml:para>
 </maml:description>
 <dev:defaultValue>$true</dev:defaultValue>
 </command:parameter>
 <command:parameter required="false" position="named" >
 <maml:name>Inputs</maml:name>
 <maml:description>
-<maml:para>Tells to process the task as incremental and requires the parameter
-Outputs with the optional switch Partial.
+<maml:para>Specifies the input items, tells to process the task as incremental,
+and requires the parameter Outputs with the optional switch Partial.
 
 Inputs are file items or paths or a script block which gets them.
 Outputs are file paths or a script block which gets them.
 
-Automatic variables for task script jobs:
+Automatic variables for incremental task script jobs:
 
     $Inputs - full input paths, array of strings
     $Outputs - result of the evaluated parameter Outputs
@@ -611,9 +660,8 @@ process{} blocks of a partial task two more variables are defined:
     $_ - current full input path
     $2 - current output path
 
-Wiki about incremental and partial incremental tasks:
-https://github.com/nightroman/Invoke-Build/wiki/Incremental-Tasks
-https://github.com/nightroman/Invoke-Build/wiki/Partial-Incremental-Tasks</maml:para>
+See also wiki topics about incremental tasks:
+https://github.com/nightroman/Invoke-Build/wiki</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
@@ -633,8 +681,8 @@ used together with Inputs and Outputs. See Inputs for details.</maml:para>
 <command:parameter required="false" position="named" >
 <maml:name>Source</maml:name>
 <maml:description>
-<maml:para>Specifies the task source. It is used by task wrappers in order to
-provide actual source needed for location messages and help synopsis.</maml:para>
+<maml:para>Specifies the task source. It is used by wrapper functions in order to
+provide the actual source for location messages and task help synopsis.</maml:para>
 </maml:description>
 </command:parameter>
 </command:parameters>
@@ -646,13 +694,7 @@ provide actual source needed for location messages and help synopsis.</maml:para
 <maml:linkText>Get-BuildError</maml:linkText>
 </maml:navigationLink>
 <maml:navigationLink>
-<maml:uri>https://github.com/nightroman/Invoke-Build/wiki/Script-Tutorial</maml:uri>
-</maml:navigationLink>
-<maml:navigationLink>
-<maml:uri>https://github.com/nightroman/Invoke-Build/wiki/Incremental-Tasks</maml:uri>
-</maml:navigationLink>
-<maml:navigationLink>
-<maml:uri>https://github.com/nightroman/Invoke-Build/wiki/Partial-Incremental-Tasks</maml:uri>
+<maml:uri>https://github.com/nightroman/Invoke-Build/wiki</maml:uri>
 </maml:navigationLink>
 </maml:relatedLinks>
 </command:command>
@@ -725,7 +767,7 @@ tasks use &apos;error&apos; (Get-BuildError) in order to check for errors.</maml
 </command:details>
 <maml:description>
 <maml:para>Scripts use its alias &apos;error&apos;. It is used when some tasks are referenced
-safe as (job Task -Safe) in order to analyse their potential errors.</maml:para>
+safe (job Task -Safe) in order to get and analyse their potential errors.</maml:para>
 </maml:description>
 <command:syntax>
 <command:syntaxItem>
@@ -773,8 +815,12 @@ safe as (job Task -Safe) in order to analyse their potential errors.</maml:para>
 <command:noun>Build</command:noun>
 </command:details>
 <maml:description>
-<maml:para>Scripts use its alias &apos;assert&apos;. It checks for a condition and if it is not
-true throws an error with an optional message text.</maml:para>
+<maml:para>Scripts use its alias &apos;assert&apos;. This command checks for a condition and if
+it is not true throws an error with the default or a specified message.
+
+NOTE: Consider to use &apos;equals X Y&apos; instead of &apos;assert (X -eq Y)&apos;. It is
+easier to type, it avoids subtle PowerShell conversions, and its error
+message is more informative.</maml:para>
 </maml:description>
 <command:syntax>
 <command:syntaxItem>
@@ -799,23 +845,78 @@ true throws an error with an optional message text.</maml:para>
 <command:parameter required="false" position="2" >
 <maml:name>Message</maml:name>
 <maml:description>
-<maml:para>A user friendly message describing the assertion condition.</maml:para>
+<maml:para>An optional message describing the assertion condition.</maml:para>
 </maml:description>
 </command:parameter>
 </command:parameters>
+<maml:relatedLinks>
+<maml:navigationLink>
+<maml:linkText>Assert-BuildEquals</maml:linkText>
+</maml:navigationLink>
+</maml:relatedLinks>
+</command:command>
+<command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
+<command:details>
+<command:name>Assert-BuildEquals</command:name>
+<maml:description>
+<maml:para>Verifies that two specified objects are equal.</maml:para>
+</maml:description>
+<command:verb>Assert</command:verb>
+<command:noun>BuildEquals</command:noun>
+</command:details>
+<maml:description>
+<maml:para>Scripts use its alias &apos;equals&apos;. This command verifies that two specified
+objects are equal using [Object]::Equals(). If objects are not equal the
+command fails with a message showing object values and types.
+
+NOTE: Comparison of strings is case sensitive. For case insensitive
+comparison use &apos;assert (X -eq Y)&apos;.</maml:para>
+</maml:description>
+<command:syntax>
+<command:syntaxItem>
+<maml:name>Assert-BuildEquals</maml:name>
+<command:parameter required="false" position="1" >
+<maml:name>A</maml:name>
+<command:parameterValue required="true">Object</command:parameterValue>
+</command:parameter>
+<command:parameter required="false" position="2" >
+<maml:name>B</maml:name>
+<command:parameterValue required="true">Object</command:parameterValue>
+</command:parameter>
+</command:syntaxItem>
+</command:syntax>
+<command:parameters>
+<command:parameter required="false" position="1" >
+<maml:name>A</maml:name>
+<maml:description>
+<maml:para>The first object.</maml:para>
+</maml:description>
+</command:parameter>
+<command:parameter required="false" position="2" >
+<maml:name>B</maml:name>
+<maml:description>
+<maml:para>The second object.</maml:para>
+</maml:description>
+</command:parameter>
+</command:parameters>
+<maml:relatedLinks>
+<maml:navigationLink>
+<maml:linkText>Assert-Build</maml:linkText>
+</maml:navigationLink>
+</maml:relatedLinks>
 </command:command>
 <command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10">
 <command:details>
 <command:name>Get-BuildProperty</command:name>
 <maml:description>
-<maml:para>Gets PowerShell or environment variable or the default.</maml:para>
+<maml:para>Gets the session or environment variable or the default value.</maml:para>
 </maml:description>
 <command:verb>Get</command:verb>
 <command:noun>BuildProperty</command:noun>
 </command:details>
 <maml:description>
 <maml:para>Scripts use its alias &apos;property&apos;. It gets the first not null value of these
-three: PowerShell variable, environment variable, specified default value.
+three: session variable, environment variable, optional default value.
 Otherwise an error is thrown.
 
 CAUTION: Properties should be used sparingly with carefully chosen names
@@ -838,15 +939,15 @@ that unlikely can already exist and be not related to the build script.</maml:pa
 <command:parameter required="true" position="1" >
 <maml:name>Name</maml:name>
 <maml:description>
-<maml:para>PowerShell or environment variable name.</maml:para>
+<maml:para>Session or environment variable name.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="2" >
 <maml:name>Value</maml:name>
 <maml:description>
-<maml:para>Default value to be returned if the property is not found. Omitted or
-null value requires the specified property to be defined. If it is not
-then an error is thrown.</maml:para>
+<maml:para>Specifies the default value to be used if the variable is not found.
+Omitted or null values require the variable to exist and be not null.
+Otherwise an error is thrown.</maml:para>
 </maml:description>
 </command:parameter>
 </command:parameters>
@@ -863,7 +964,7 @@ then an error is thrown.</maml:para>
 <command:examples>
 <command:example>
 <maml:title>-------------------------- EXAMPLE 1 --------------------------</maml:title>
-<dev:code># Inherit the existing value or throw an error
+<dev:code># Inherit an existing value or throw an error
 
 $OutputPath = property OutputPath</dev:code>
 </command:example>
@@ -906,7 +1007,9 @@ $WarningLevel = property WarningLevel 4</dev:code>
 <maml:title>-------------------------- EXAMPLE 1 --------------------------</maml:title>
 <dev:code>assert ((Get-BuildVersion).Major -ge 2)</dev:code>
 <dev:remarks>
-<maml:para>This command works like `require version`. It can be used as the first command in a build script in order to ensure that the script is being built by a proper engine (version 2+).</maml:para>
+<maml:para>This command works like `require version`. Use it as the first command in a
+build script in order to ensure that the script is being built by a proper
+engine (version 2+ in this example).</maml:para>
 </dev:remarks>
 </command:example>
 </command:examples>
@@ -915,17 +1018,17 @@ $WarningLevel = property WarningLevel 4</dev:code>
 <command:details>
 <command:name>Invoke-BuildExec</command:name>
 <maml:description>
-<maml:para>Invokes the command and checks for the $LastExitCode.</maml:para>
+<maml:para>Invokes an application and checks $LastExitCode.</maml:para>
 </maml:description>
 <command:verb>Invoke</command:verb>
 <command:noun>BuildExec</command:noun>
 </command:details>
 <maml:description>
 <maml:para>Scripts use its alias &apos;exec&apos;. It invokes the specified script block which
-is supposed to call an executable. Then the $LastExitCode is checked. By
-default if the code is not 0 then the function throws an error.
+is supposed to call an executable. Then $LastExitCode is checked. If it
+does not fit to the specified values (0 by default) an error is thrown.
 
-It is common to call .NET tools, e.g. MSBuild. See Use-BuildAlias.</maml:para>
+It is often used with .NET tools, e.g. MSBuild. See Use-BuildAlias.</maml:para>
 </maml:description>
 <command:syntax>
 <command:syntaxItem>
@@ -944,10 +1047,9 @@ It is common to call .NET tools, e.g. MSBuild. See Use-BuildAlias.</maml:para>
 <command:parameter required="true" position="1" >
 <maml:name>Command</maml:name>
 <maml:description>
-<maml:para>A command that invokes an executable which exit code is checked. It is
-mandatory to invoke an external application, directly (.exe) or not
-(.cmd, .bat, etc.), otherwise $LastExitCode is not set or contains an
-exit code of another command.</maml:para>
+<maml:para>Command that invokes an executable which exit code is checked. It must
+invoke an application directly (.exe) or not (.cmd, .bat), otherwise
+$LastExitCode is not set or contains an exit code of another command.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="2" >
@@ -964,7 +1066,7 @@ exit code of another command.</maml:para>
 <maml:name>Objects</maml:name>
 </dev:type>
 <maml:description>
-<maml:para>Outputs of the command and the tool that it invokes.</maml:para>
+<maml:para>Output of the specified command.</maml:para>
 </maml:description>
 </command:returnValue>
 </command:returnValues>
@@ -986,7 +1088,7 @@ exec { robocopy Source Target /mir } (0..3)</dev:code>
 <command:details>
 <command:name>Use-BuildAlias</command:name>
 <maml:description>
-<maml:para>(use) Sets framework/directory tool aliases.</maml:para>
+<maml:para>Sets framework/directory tool aliases.</maml:para>
 </maml:description>
 <command:verb>Use</command:verb>
 <command:noun>BuildAlias</command:noun>
@@ -1000,10 +1102,11 @@ scope where it is called from.
 
 This function is often called from a build script and all tasks use script
 scope aliases. But it can be called from tasks in order to use more tools
-including other frameworks or tool directories.
+including other framework or tool directories.
 
 MSBuild is one of frequently used tools. Examples:
 
+    use * MSBuild
     use 4.0 MSBuild
     use Framework\v2.0.50727 MSBuild</maml:para>
 </maml:description>
@@ -1026,15 +1129,16 @@ MSBuild is one of frequently used tools. Examples:
 <maml:description>
 <maml:para>Specifies the tools directory.
 
-If it starts with digits followed by a dot then it is assumed to be a
-MSBuild version and the path is taken from the registry.
+If it is * or it starts with digits followed by a dot then the MSBuild
+version and the path is taken from the registry. The * is used for the
+latest available version.
 
 If it is like Framework* then it is assumed to be a path relative to
 Microsoft.NET in the Windows directory.
 
 Otherwise it is a full or relative literal path of any directory.
 
-Examples: 4.0, Framework\v4.0.30319, Framework\v2.0.50727, .\Tools</maml:para>
+Examples: *, 4.0, Framework\v4.0.30319, .\Tools</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="2" >
@@ -1064,14 +1168,15 @@ exec { MSBuild Some.csproj /t:Build /p:Configuration=Release }</dev:code>
 <command:details>
 <command:name>Write-Build</command:name>
 <maml:description>
-<maml:para>Writes colored text (if this makes sense for the output).</maml:para>
+<maml:para>Writes text using colors if they are supported.</maml:para>
 </maml:description>
 <command:verb>Write</command:verb>
 <command:noun>Build</command:noun>
 </command:details>
 <maml:description>
-<maml:para>This function is used in order to output colored text (e.g. to a console).
-Unlike Write-Host it is suitable for redirected output, e.g. to a file.</maml:para>
+<maml:para>This function is used in order to output colored text, e.g. to a console.
+Unlike Write-Host it is suitable for redirected output, e.g. to a file.
+If the current host does not support colors then just text is written.</maml:para>
 </maml:description>
 <command:syntax>
 <command:syntaxItem>
@@ -1097,7 +1202,7 @@ Unlike Write-Host it is suitable for redirected output, e.g. to a file.</maml:pa
 <command:parameter required="false" position="2" >
 <maml:name>Text</maml:name>
 <maml:description>
-<maml:para>Text to be printed using colors or just sent to the output.</maml:para>
+<maml:para>Text to be printed using colors if they are supported.</maml:para>
 </maml:description>
 </command:parameter>
 </command:parameters>
@@ -1189,13 +1294,9 @@ limited by the number of processors by default.</maml:para>
     Task, File, Parameters - Invoke-Build.ps1 parameters
     Log - Tells to write build output to the specified file
 
-Any number of builds is allowed, including 0 and 1. Maximum number of
-parallel builds is limited by number of processors by default. It can
-be changed by the parameter MaximumBuilds.
-
-If exactly a [hashtable[]] (not [object[]]) is passed in then after the
-call it contains modified copies of input hashtables used as parameters
-passed in Invoke-Build. Their Result.Value contain build result info.</maml:para>
+Any number of builds is allowed, including 0 and 1. The maximum number
+of parallel builds is the number of processors by default. It can be
+changed by the parameter MaximumBuilds.</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
@@ -1214,15 +1315,13 @@ Value to be assigned ([ref], [hashtable]).
 
 Result properties:
 
-    Tasks - tasks (see: help Invoke-Build -Parameter Result)
-    Errors - error records (*)
-    Warnings - warning messages
+    Tasks - tasks (*)
+    Errors - errors (*)
+    Warnings - warnings (*)
     Started - start time
     Elapsed - build duration
 
-(*) This list will continue to exist but objects may change in the
-future. For better analysis iterate through Tasks and check their
-Error.</maml:para>
+(*) see: help Invoke-Build -Parameter Result</maml:para>
 </maml:description>
 </command:parameter>
 <command:parameter required="false" position="named" >
@@ -1235,7 +1334,7 @@ Error.</maml:para>
 <command:returnValues>
 <command:returnValue>
 <dev:type>
-<maml:name>text</maml:name>
+<maml:name>Text</maml:name>
 </dev:type>
 <maml:description>
 <maml:para>Output of invoked builds and other log messages.</maml:para>
