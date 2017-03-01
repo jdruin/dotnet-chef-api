@@ -26,7 +26,8 @@ $RECYCLE.BIN/
 .LSOverride
 
 # Icon must ends with two \r.
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -167,7 +168,7 @@ publish/
 *.pubxml
 
 # NuGet Packages
-packages/*
+#packages/*
 *.nupkg
 ## TODO: If the tool you use requires repositories.config
 ## uncomment the next line
