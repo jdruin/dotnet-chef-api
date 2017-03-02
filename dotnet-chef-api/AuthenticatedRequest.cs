@@ -65,7 +65,7 @@ namespace mattberther.chef
             requestMessage.Headers.Add("X-Ops-Timestamp", timestamp);
             requestMessage.Headers.Add("X-Ops-Content-Hash", body.ToBase64EncodedSha1String());
             requestMessage.Headers.Add("Host", String.Format("{0}:{1}", requestUri.Host, requestUri.Port));
-            requestMessage.Headers.Add("X-Chef-Version", "11.4.0");
+            requestMessage.Headers.Add("X-Chef-Version", "12.14.89");
 
             if (method != HttpMethod.Get)
             {
