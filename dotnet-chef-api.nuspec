@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>dotnet-chef-api</id>
+    <version>1.0.0</version>
+    <authors>Matt Berther, Lloyd Holman</authors>
+    <owners>Matt Berther, Lloyd Holman</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <summary>Simple C# class library used to interact with a Chef Server's REST API.</summary>
+    <description>This is a simple C# class library used to interact with a Chef Server's REST API. You can use this with a open source and Enterprise versions of the Chef Server.</description>
+    <releaseNotes></releaseNotes>
+    <copyright>Copyright 2017</copyright>
+  </metadata>
+  <files>
+    <file src="dotnet-chef-api\bin\*.dll" target="lib\net45\" />
+  </files>
+</package>
