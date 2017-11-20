@@ -6,6 +6,8 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.OpenSsl;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 
 namespace mattberther.chef
 {
@@ -15,6 +17,9 @@ namespace mattberther.chef
         private readonly Uri requestUri;
         private readonly HttpMethod method;
         private readonly string body;
+        private readonly byte[] file;
+        private readonly string fileName;
+        private readonly string checksum;
 
         private readonly string timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
         private string signature = String.Empty;
@@ -24,6 +29,16 @@ namespace mattberther.chef
         {
         }
 
+        public AuthenticatedRequest(string client, Uri requestUri, HttpMethod method, string fileName, byte[] file, string checksum)
+        {
+            this.client = client;
+            this.requestUri = requestUri;
+            this.method = method;
+            this.file = file;
+            this.fileName = fileName;
+            this.body = String.Empty;
+            this.checksum = checksum;
+        }
         public AuthenticatedRequest(string client, Uri requestUri, HttpMethod method, string body)
         {
             this.client = client;
@@ -63,15 +78,43 @@ namespace mattberther.chef
             requestMessage.Headers.Add("X-Ops-Sign", "algorithm=sha1;version=1.0");
             requestMessage.Headers.Add("X-Ops-UserId", client);
             requestMessage.Headers.Add("X-Ops-Timestamp", timestamp);
-            requestMessage.Headers.Add("X-Ops-Content-Hash", body.ToBase64EncodedSha1String());
             requestMessage.Headers.Add("Host", String.Format("{0}:{1}", requestUri.Host, requestUri.Port));
             requestMessage.Headers.Add("X-Chef-Version", "12.14.89");
+            requestMessage.Headers.Add("X-Ops-Server-API-Version", "0");
 
             if (method != HttpMethod.Get)
             {
-                requestMessage.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
-                requestMessage.Content.Headers.Add("Content-Type", "application/json");
+                if (file != null)
+                {
+                    // This header is derived from mixlib/authentication/signedheaderauth/hashed body which leads to digester.rb
+                    requestMessage.Headers.Add("X-Ops-Content-Hash", file.ToBase64EncodedSha1String());
+
+                    // Pulled this out of knife run on -VV
+                    requestMessage.Headers.Add("Accept-Encoding", "gzip; q = 1.0,deflate; q = 0.6,identity; q = 0.3");
+
+                    requestMessage.Content = new ByteArrayContent(file);
+                    // This header is from the notes in chef/cookbook_uploader/uploader_function_for
+                    requestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-binary");
+
+                    requestMessage.Content.Headers.ContentMD5 = file.ToMD5Hash();
+                    
+
+                }
+                else
+                {
+                    requestMessage.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
+                    requestMessage.Content.Headers.Add("Content-Type", "application/json");
+                    requestMessage.Headers.Add("X-Ops-Content-Hash", body.ToBase64EncodedSha1String());
+
+                }
+                
             }
+            else
+            {
+                requestMessage.Headers.Add("X-Ops-Content-Hash", body.ToBase64EncodedSha1String());
+            }
+
+
 
             var i = 1;
             foreach (var line in signature.Split(60))

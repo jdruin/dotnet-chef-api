@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace mattberther.chef
 {
@@ -17,18 +18,23 @@ namespace mattberther.chef
             this.server = server;
         }
 
-        public string SendRequest(AuthenticatedRequest request)
+        public HttpResponseMessage SendRequest(AuthenticatedRequest request)
+        {
+            return SendRequestAsync(request).Result;
+        }
+
+        public async Task<HttpResponseMessage> SendRequestAsync(AuthenticatedRequest request)
         {
             using (var client = new HttpClient())
             {
                 client.BaseAddress = server;
-                
+
                 var message = request.Create();
-                var result = client.SendAsync(message).Result;
-                
+                var result = await client.SendAsync(message);
+
                 result.EnsureSuccessStatusCode();
 
-                return result.Content.ReadAsStringAsync().Result;
+                return result;
             }
         }
     }
